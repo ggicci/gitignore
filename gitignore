@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+set -o nounset
+
+CACHE_DIR="${HOME}/.cache/vault/gitignore"
+CACHE_META="${CACHE_DIR}.meta"
+
+rebuild_cache() { #? Clone gitignore repo from github, update periodically
+  # Clone (first time)
+  local now
+  now="$( date +%s )"
+  if [[ ! -d "${CACHE_DIR}/.git" ]]; then
+    git clone https://github.com/github/gitignore.git "${CACHE_DIR}" &>/dev/null
+    echo "${now}" > "${CACHE_META}"
+    return
+  fi
+
+  # Skip if updated within a day
+  local updated_at
+  updated_at="$( cat "${CACHE_META}" 2>/dev/null || echo 0 )"
+  if [[ $(( now - updated_at )) -le 86400 ]]; then
+    return  # no need to update
+  fi
+
+  # Update
+  (
+    cd "${CACHE_DIR}"
+    git pull --ff-only &>/dev/null
+    echo "${now}" > "${CACHE_META}"
+  )
+}
+
+locate_ignore_file() { #? Locate the gitgnore file from cached gitignore repo
+  local lang="$1"
+
+  find "${CACHE_DIR}" -type f -iname "${lang}.gitignore"
+}
+
+list_available_templates() { #? List available templates
+  local name
+  while IFS= read -r -d '' filename; do
+    name="$( basename "${filename}" )"
+    echo "${name%.*}"  # remove extension
+  done < <( find "${CACHE_DIR}" -type f -name "*.gitignore" -print0 )
+}
+
+usage() {
+  local cmd
+  cmd="$( basename "$0" )"
+  echo "
+Usage: ${cmd} <template>
+
+Examples:
+  ${cmd} python
+  ${cmd} go > .gitignore
+"
+}
+
+main() {
+  local lang="${1:-notset}"
+
+  if [[ "${lang}" == "notset" ]]; then
+    usage
+    exit 1
+  fi
+
+  rebuild_cache
+  local found
+  found="$( locate_ignore_file "${lang}" )"
+
+  # Not found
+  if [[ "${found}" == "" ]]; then
+    >&2 echo "gitignore: ${lang} not found"
+    >&2 echo "
+Available:"
+    list_available_templates | sort | tr '\n' ' ' >&2
+    exit 1
+  fi
+
+  cat "${found}"
+}
+
+main "$@"
