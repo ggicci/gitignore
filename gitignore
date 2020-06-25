@@ -4,7 +4,7 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-CACHE_DIR="${HOME}/.cache/vault/gitignore"
+CACHE_DIR="${HOME}/.cache/gitignore"
 CACHE_META="${CACHE_DIR}.meta"
 
 rebuild_cache() { #? Clone gitignore repo from github, update periodically
